@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Which items should go back?</title>
+<meta property="og:title" content="Tap to choose which items to return">
+<meta property="og:description" content="A short list of Amazon items - tap Return or Keep on each one.">
+<meta property="og:type" content="website">
+<meta name="description" content="Tap Return or Keep on each item.">
 <style>
   :root { --navy:#232F3E; --orange:#FF9900; --teal:#007185; --green:#2e7d32; --red:#c62828; --bg:#f0f2f5; --ink:#0f1111; --mute:#5b6570; }
   * { box-sizing: border-box; }
@@ -91,12 +95,14 @@ const EMBEDDED = /*__DATA__*/null;
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const list = $('list');
 
+  const DEFAULT_DB = 'https://returns-ca877-default-rtdb.firebaseio.com';   // used when the link has no &db=
   function parseHash() {
     const h = location.hash || '';
     const rid = (h.match(/[#&]r=([A-Za-z0-9_-]+)/) || [])[1] || '';
     const dbRaw = (h.match(/[#&]db=([^&]+)/) || [])[1] || '';
     let db = '';
-    try { db = decodeURIComponent(dbRaw).replace(/\/+$/, ''); } catch (e) { db = dbRaw; }
+    if (!dbRaw) db = DEFAULT_DB;
+    else try { db = decodeURIComponent(dbRaw).replace(/\/+$/, ''); } catch (e) { db = dbRaw; }
     const okDb = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(firebaseio\.com|firebasedatabase\.app)$/i.test(db);
     if (rid && okDb) return { kind: 'live', id: rid, db: db };
     try {
