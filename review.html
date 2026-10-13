@@ -67,6 +67,7 @@
 <div class="bar" id="bar" style="display:none">
   <div class="sum" id="sum"></div>
   <div class="sync" id="sync"></div>
+  <button class="send" id="done-btn" style="display:none" onclick="submitDone()">✓ Done — send my choices</button>
   <button class="send" id="send" disabled>Send my choices</button>
 </div>
 
@@ -262,12 +263,14 @@ const EMBEDDED = /*__DATA__*/null;
     parts.forEach(([t, s]) => { const n = t === 'b' ? document.createElement('b') : document.createTextNode(s); if (t === 'b') n.textContent = s; $('sum').appendChild(n); });
     if (c.rt > 0) $('sum').appendChild(document.createTextNode('  ·  returning $' + c.rt.toFixed(2)));
     $('send').disabled = (c.r + c.k) === 0;
+    const db = $('done-btn'); if (db) db.disabled = (c.r + c.k) === 0;
   }
   $('bar').style.display = 'block';
   summary();
   if (LIVE) {
     $('send').textContent = 'Or send them as a message instead';
     $('send').className = 'send alt';
+    $('done-btn').style.display = 'block';
     setSync(Object.keys(choice).length ? 'Your answers save automatically' : 'Tap Return or Keep - it saves automatically');
     // reopened on another phone/browser: pick up what was already saved
     if (!Object.keys(choice).length) {
@@ -304,7 +307,31 @@ const EMBEDDED = /*__DATA__*/null;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const digits = String(data.to || '').replace(/[^0-9+]/g, '');
 
-  $('send').addEventListener('click', () => {
+  function submitDone() {
+    // Force an immediate save then show a confirmation screen
+    clearTimeout(saveTimer);
+    const btn = $('done-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    fetch(DB + '/reviews/' + RID + '.json', {
+      method: 'PATCH',
+      body: JSON.stringify({ choices: codeOf(), comments: commentsOf(), n: data.items.length, updatedAt: Date.now() })
+    }).then(r => {
+      if (!r.ok) throw new Error('http ' + r.status);
+      // swap the whole page content to a confirmation screen
+      document.body.innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px 24px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f0f2f5;text-align:center">' +
+        '<div style="font-size:64px;margin-bottom:16px">✅</div>' +
+        '<h1 style="font-size:22px;margin:0 0 10px;color:#0f1111">Got it, thanks!</h1>' +
+        '<p style="font-size:15px;color:#5b6570;margin:0 0 24px;line-height:1.5">Your choices have been saved.<br>They\'ll show up in the app automatically.</p>' +
+        '<p style="font-size:13px;color:#8a9099">You can close this page.</p>' +
+        '</div>';
+    }).catch(() => {
+      btn.disabled = false;
+      btn.textContent = '✓ Done — send my choices';
+      setSync('Could not save — check your connection and try again', 'bad');
+    });
+  }
     const m = buildMessage();
     $('msg').textContent = m;
     const enc = encodeURIComponent(m);
