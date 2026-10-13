@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which items should go back?</title>
+<meta property="og:title" content="Tap to choose which items to return">
+<meta property="og:description" content="A short list of Amazon items - tap Return or Keep on each one.">
+<meta property="og:type" content="website">
+<meta name="description" content="Tap Return or Keep on each item.">
+<style>
+  :root { --navy:#232F3E; --orange:#FF9900; --teal:#007185; --green:#2e7d32; --red:#c62828; --bg:#f0f2f5; --ink:#0f1111; --mute:#5b6570; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,"Segoe UI",Roboto,sans-serif; padding-bottom:110px; }
+  header { background:var(--navy); color:#fff; padding:18px 16px 16px; }
+  header h1 { margin:0 0 4px; font-size:20px; }
+  header p { margin:0; font-size:14px; opacity:.85; line-height:1.4; }
+  .note { margin:12px 12px 0; background:#fff8e1; border:1px solid #ffe08a; border-radius:10px; padding:10px 12px; font-size:14px; line-height:1.4; }
+  .wrap { padding:12px; }
+  .card { background:#fff; border-radius:12px; padding:14px; margin-bottom:12px; box-shadow:0 2px 5px rgba(0,0,0,.08); border-left:6px solid #bbb; transition:border-color .15s, background .15s; }
+  .card.ret  { border-left-color:var(--red);   background:#fff7f6; }
+  .card.keep { border-left-color:var(--green); background:#f5fbf5; }
+  .top { display:flex; gap:12px; align-items:flex-start; }
+  .thumb { width:92px; height:92px; flex:0 0 92px; object-fit:contain; background:#fff; border:1px solid #e2e8f0; border-radius:8px; }
+  .ph { display:flex; align-items:center; justify-content:center; font-size:36px; }
+  .info { min-width:0; flex:1; }
+  .title { font-weight:700; font-size:15px; line-height:1.35; word-break:break-word; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+  .variant { font-size:12px; color:var(--mute); margin-top:3px; }
+  .price { font-size:15px; font-weight:700; margin-top:6px; }
+  .pill { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff; margin-top:6px; background:#2e7d32; }
+  .pill.warn { background:#e08a00; } .pill.urgent { background:#d9381e; } .pill.over { background:#6a1b9a; }
+  a.view { display:inline-block; margin-top:8px; font-size:13px; font-weight:700; color:var(--teal); text-decoration:none; }
+  .choice { display:flex; gap:8px; margin-top:12px; }
+  .choice button { flex:1; border:2px solid #d5dbe1; background:#fff; color:#333; border-radius:10px; padding:13px 6px; font-size:15px; font-weight:700; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .choice button.on.ret  { background:var(--red);   border-color:var(--red);   color:#fff; }
+  .choice button.on.keep { background:var(--green); border-color:var(--green); color:#fff; }
+  .cmt-toggle { display:block; width:100%; margin-top:8px; background:none; border:none; text-align:left; padding:6px 2px; font-size:13px; font-weight:700; color:var(--mute); cursor:pointer; }
+  .cmt-toggle.has { color:var(--teal); }
+  .cmt-box { display:none; width:100%; margin-top:4px; border:1px solid #d5dbe1; border-radius:8px; padding:9px 10px; font:14px/1.4 inherit; font-family:inherit; background:#fff; resize:vertical; }
+  .cmt-box.open { display:block; }
+  .done { margin:12px 12px 0; background:#e8f5e9; border:2px solid #2e7d32; color:#1b5e20; border-radius:12px; padding:16px; font-size:17px; font-weight:800; line-height:1.4; text-align:center; }
+  .done small { display:block; font-size:13px; font-weight:600; margin-top:4px; color:#2e5d32; }
+  .sync.all { font-size:15px; }
+  .bar { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #d5dbe1; box-shadow:0 -3px 12px rgba(0,0,0,.12); padding:10px 12px calc(10px + env(safe-area-inset-bottom)); z-index:20; }
+  .sum { font-size:13px; color:var(--mute); text-align:center; margin-bottom:8px; }
+  .sum b { color:var(--ink); }
+  .send { width:100%; background:var(--orange); color:#fff; border:none; border-radius:10px; padding:15px; font-size:16px; font-weight:800; cursor:pointer; }
+  .send:disabled { background:#c9ced3; }
+  .send.alt { background:#fff; color:var(--teal); border:2px solid #d5dbe1; font-size:14px; padding:11px; margin-top:6px; }
+  .send.alt:disabled { color:#aab; background:#fff; }
+  .sync { text-align:center; font-size:13px; font-weight:700; margin-bottom:6px; min-height:18px; color:var(--mute); }
+  .sync.ok { color:var(--green); } .sync.bad { color:var(--red); }
+  .sheet-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; align-items:flex-end; }
+  .sheet { background:#fff; width:100%; border-radius:16px 16px 0 0; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); max-height:88vh; overflow:auto; }
+  .sheet h2 { margin:0 0 4px; font-size:18px; }
+  .sheet p { margin:0 0 12px; font-size:13px; color:var(--mute); }
+  pre { white-space:pre-wrap; word-break:break-word; background:#f4f6f8; border:1px solid #e1e5e9; border-radius:10px; padding:10px; font:13px/1.45 ui-monospace,Menlo,Consolas,monospace; max-height:34vh; overflow:auto; margin:0 0 12px; }
+  .opt { display:block; width:100%; text-align:center; text-decoration:none; border:none; border-radius:10px; padding:14px; margin-bottom:8px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; }
+  .o-share { background:var(--navy); } .o-sms { background:var(--teal); } .o-wa { background:#1fa855; } .o-copy { background:#555; } .o-close { background:#e9edf0; color:#333; }
+  .empty { text-align:center; color:var(--mute); padding:60px 24px; line-height:1.5; }
+  .toast { position:fixed; left:50%; bottom:120px; transform:translateX(-50%); background:#222; color:#fff; padding:9px 14px; border-radius:18px; font-size:13px; z-index:60; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="hello">Which of these should go back?</h1>
+  <p id="sub">Tap <b>Return</b> or <b>Keep</b> on each item, then send me your choices.</p>
+</header>
+<div id="note" class="note" style="display:none"></div>
+<div id="done" class="done" style="display:none"></div>
+<div class="wrap" id="list"></div>
+
+<div class="bar" id="bar" style="display:none">
+  <div class="sum" id="sum"></div>
+  <div class="sync" id="sync"></div>
+  <button class="send" id="send" disabled>Send my choices</button>
+</div>
+
+<div class="sheet-bg" id="sheet-bg">
+  <div class="sheet">
+    <h2>Send your choices</h2>
+    <p>This is what will be sent:</p>
+    <pre id="msg"></pre>
+    <button class="opt o-share" id="o-share" style="display:none">Share…</button>
+    <a class="opt o-sms" id="o-sms" href="#">Text message</a>
+    <a class="opt o-wa" id="o-wa" href="#" target="_blank" rel="noopener">WhatsApp</a>
+    <button class="opt o-copy" id="o-copy">Copy to paste anywhere</button>
+    <button class="opt o-close" id="o-close">Back</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// The app fills this in when it makes the file. A hosted copy of this page reads #d=... from the link instead.
+const EMBEDDED = /*__DATA__*/null;
+
+(function () {
+  const $ = id => document.getElementById(id);
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const list = $('list');
+
+  const DEFAULT_DB = 'https://returns-ca877-default-rtdb.firebaseio.com';   // used when the link has no &db=
+  function parseHash() {
+    const h = location.hash || '';
+    const rid = (h.match(/[#&]r=([A-Za-z0-9_-]+)/) || [])[1] || '';
+    const dbRaw = (h.match(/[#&]db=([^&]+)/) || [])[1] || '';
+    let db = '';
+    if (!dbRaw) db = DEFAULT_DB;
+    else try { db = decodeURIComponent(dbRaw).replace(/\/+$/, ''); } catch (e) { db = dbRaw; }
+    const okDb = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(firebaseio\.com|firebasedatabase\.app)$/i.test(db);
+    if (rid && okDb) return { kind: 'live', id: rid, db: db };
+    try {
+      const m = h.match(/[#&]d=([A-Za-z0-9_-]+)/);
+      if (!m) return null;
+      let b = m[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b.length % 4) b += '=';
+      return { kind: 'embed', data: JSON.parse(decodeURIComponent(escape(atob(b)))) };
+    } catch (e) { return null; }
+  }
+
+  function boot(data) {
+  if (!data || !Array.isArray(data.items) || !data.items.length) {
+    list.appendChild(el('div', 'empty', 'Nothing to show here. Please open the file or link that was sent to you.'));
+    return;
+  }
+
+  const saveKey = 'rv_' + String(data.id || 'x');
+  let choice = {};
+  try { choice = JSON.parse(localStorage.getItem(saveKey) || '{}') || {}; } catch (e) {}
+  function persist() { try { localStorage.setItem(saveKey, JSON.stringify(choice)); } catch (e) {} }
+  const cKey = 'rvc_' + String(data.id || 'x');
+  let comments = {};
+  try { comments = JSON.parse(localStorage.getItem(cKey) || '{}') || {}; } catch (e) {}
+  function persistC() { try { localStorage.setItem(cKey, JSON.stringify(comments)); } catch (e) {} }
+  const commentList = () => data.items.map((_, i) => String(comments[i] || '').slice(0, 500));
+
+  // Live mode: choices are saved to a small online database that the sender's app reads, so nothing has to be sent back by hand.
+  const DB = (function () {
+    const u = String(data.db || '').replace(/\/+$/, '');
+    return /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(firebaseio\.com|firebasedatabase\.app)$/i.test(u) ? u : '';
+  })();
+  const RID = String(data.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+  const LIVE = !!(DB && RID.length >= 12);
+  const repaint = [];
+  const cmtRepaint = [];
+  function setSync(t, cls) { const s = $('sync'); s.textContent = t; s.className = 'sync' + (cls ? ' ' + cls : ''); }
+  const codeOf = () => data.items.map((_, i) => choice[i] || '-').join('');
+  let saveTimer = null;
+  let savedOk = false;
+  function save() {
+    if (!LIVE) return;
+    setSync('Saving…');
+    savedOk = false; updateDone();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      fetch(DB + '/reviews/' + RID + '.json', { method: 'PATCH', body: JSON.stringify({ choices: codeOf(), comments: commentList(), n: data.items.length, updatedAt: Date.now() }) })
+        .then(r => {
+          if (!r.ok) throw new Error('http ' + r.status);
+          savedOk = true;
+          if (counts().u === 0) setSync('🎉 All done - you can close this page now', 'ok all');
+          else setSync('✓ Saved - you can close this page any time, or keep going', 'ok');
+          updateDone();
+        })
+        .catch(() => setSync('Could not save - check your connection, then tap a choice again', 'bad'));
+    }, 350);
+  }
+
+  if (data.name) $('hello').textContent = 'Hi ' + String(data.name).slice(0, 40) + '! Which of these should go back?';
+  if (data.note) { const n = $('note'); n.textContent = String(data.note).slice(0, 500); n.style.display = 'block'; }
+
+  const safeLink = u => /^https:\/\/(www\.)?amazon\.com\//i.test(u || '') ? u : '';
+  const safeImg = u => /^https:\/\//i.test(u || '') ? u : '';
+  const money = s => { const n = parseFloat(String(s == null ? '' : s).replace(/[^0-9.]/g, '')); return isNaN(n) ? null : n; };
+  const daysSince = () => Math.max(0, Math.floor((Date.now() - (data.ts || Date.now())) / 864e5));
+
+  const cards = [];
+  data.items.forEach((it, idx) => {
+    const card = el('div', 'card');
+    const top = el('div', 'top');
+    const img = safeImg(it.i);
+    if (img) {
+      const im = el('img', 'thumb'); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.loading = 'lazy'; im.src = img;
+      im.addEventListener('error', () => { const p = el('div', 'thumb ph', '📦'); im.replaceWith(p); });
+      top.appendChild(im);
+    } else top.appendChild(el('div', 'thumb ph', '📦'));
+
+    const info = el('div', 'info');
+    info.appendChild(el('div', 'title', it.t || 'Amazon item'));
+    if (it.v) info.appendChild(el('div', 'variant', it.v));
+    const p = money(it.p);
+    if (p != null) info.appendChild(el('div', 'price', '$' + p.toFixed(2)));
+    if (typeof it.dl === 'number') {
+      const left = it.dl - daysSince();
+      const txt = left < 0 ? 'Return window may have closed' : left === 0 ? 'Return window closes today' : 'Return window: ' + left + ' day' + (left === 1 ? '' : 's') + ' left' + (it.d ? ' (' + it.d + ')' : '');
+      info.appendChild(el('span', 'pill ' + (left < 0 ? 'over' : left <= 2 ? 'urgent' : left <= 7 ? 'warn' : ''), txt));
+      info.appendChild(document.createElement('br'));
+    }
+    const link = safeLink(it.u);
+    if (link) { const a = el('a', 'view', /amazon\.com\/s\?/i.test(link) ? 'Search Amazon for this ↗' : 'View on Amazon ↗'); a.href = link; a.target = '_blank'; a.rel = 'noopener'; info.appendChild(a); }
+    top.appendChild(info);
+    card.appendChild(top);
+
+    const row = el('div', 'choice');
+    const bR = el('button', 'ret', '↩ Return'), bK = el('button', 'keep', '✓ Keep');
+    row.appendChild(bR); row.appendChild(bK);
+    card.appendChild(row);
+
+    const tg = el('button', 'cmt-toggle'), box = el('textarea', 'cmt-box');
+    tg.type = 'button'; box.rows = 3; box.maxLength = 500; box.placeholder = 'Question or note about this item…';
+    box.value = comments[idx] || '';
+    function paintC() {
+      const has = !!(comments[idx] && comments[idx].trim());
+      tg.className = 'cmt-toggle' + (has ? ' has' : '');
+      tg.textContent = has ? '💬 1 comment' : '💬 Add a comment';
+    }
+    tg.addEventListener('click', () => { box.classList.toggle('open'); if (box.classList.contains('open')) box.focus(); });
+    box.addEventListener('input', () => {
+      if (box.value.trim()) comments[idx] = box.value; else delete comments[idx];
+      persistC(); paintC(); save();
+    });
+    card.appendChild(tg); card.appendChild(box);
+    if (comments[idx]) box.classList.add('open');
+    paintC();
+    cmtRepaint.push(() => { box.value = comments[idx] || ''; paintC(); if (comments[idx]) box.classList.add('open'); });
+
+    function paint() {
+      const c = choice[idx];
+      card.className = 'card' + (c === 'r' ? ' ret' : c === 'k' ? ' keep' : '');
+      bR.className = 'ret' + (c === 'r' ? ' on' : '');
+      bK.className = 'keep' + (c === 'k' ? ' on' : '');
+    }
+    function set(v) { if (choice[idx] === v) delete choice[idx]; else choice[idx] = v; persist(); paint(); summary(); save(); }
+    bR.addEventListener('click', () => set('r'));
+    bK.addEventListener('click', () => set('k'));
+    repaint.push(paint);
+    paint();
+    cards.push(card);
+    list.appendChild(card);
+  });
+
+  function counts() {
+    let r = 0, k = 0, rt = 0;
+    data.items.forEach((it, i) => { if (choice[i] === 'r') { r++; rt += money(it.p) || 0; } else if (choice[i] === 'k') k++; });
+    return { r, k, u: data.items.length - r - k, rt };
+  }
+  function summary() {
+    const c = counts();
+    $('sum').innerHTML = '';
+    const parts = [['b', c.r + ' return'], ['t', ' · '], ['b', c.k + ' keep'], ['t', ' · '], ['b', c.u + ' not chosen']];
+    parts.forEach(([t, s]) => { const n = t === 'b' ? document.createElement('b') : document.createTextNode(s); if (t === 'b') n.textContent = s; $('sum').appendChild(n); });
+    if (c.rt > 0) $('sum').appendChild(document.createTextNode('  ·  returning $' + c.rt.toFixed(2)));
+    $('send').disabled = (c.r + c.k) === 0;
+    updateDone();
+  }
+  // tells the person clearly when they are finished and can leave the page
+  function updateDone() {
+    const c = counts(), box = $('done');
+    let html = '';
+    if (c.u === 0) {
+      if (LIVE) { if (savedOk) html = '🎉 All done!<small>Your answers have been sent. You can close this page now.</small>'; }
+      else html = '✓ All chosen!<small>Tap “Send my choices” below to send them back, then you can close this page.</small>';
+    }
+    box.innerHTML = html;
+    box.style.display = html ? 'block' : 'none';
+    if (html) { try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }
+  }
+  $('bar').style.display = 'block';
+  summary();
+  if (LIVE) {
+    $('send').textContent = 'Or send them as a message instead';
+    $('send').className = 'send alt';
+    setSync(Object.keys(choice).length ? 'Your answers save automatically' : 'Tap Return or Keep - it saves automatically');
+    if (Object.keys(choice).length) { savedOk = true; updateDone(); }   // reopened with earlier answers
+    // reopened on another phone/browser: pick up what was already saved
+    if (!Object.keys(choice).length || !Object.keys(comments).length) {
+      fetch(DB + '/reviews/' + RID + '.json').then(r => r.ok ? r.json() : null).then(v => {
+        if (!v) return;
+        if (!Object.keys(choice).length && typeof v.choices === 'string') {
+          for (let i = 0; i < data.items.length; i++) { const c = v.choices.charAt(i); if (c === 'r' || c === 'k') choice[i] = c; }
+          persist(); repaint.forEach(f => f()); summary();
+          if (Object.keys(choice).length) { setSync('✓ Your earlier answers were loaded', 'ok'); savedOk = true; updateDone(); }
+        }
+        if (!Object.keys(comments).length && v.comments) {
+          const cs = Array.isArray(v.comments) ? v.comments : Object.keys(v.comments).map(k => v.comments[k]);
+          cs.forEach((t, i) => { if (i < data.items.length && typeof t === 'string' && t.trim()) comments[i] = t; });
+          persistC(); cmtRepaint.forEach(f => f());
+        }
+      }).catch(() => {});
+    }
+  }
+
+  const short = (s, n) => { s = String(s || 'Amazon item').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  function buildMessage() {
+    const lines = [];
+    const grp = { r: [], k: [], u: [] };
+    data.items.forEach((it, i) => { const cm = String(comments[i] || '').replace(/\s+/g, ' ').trim(); grp[choice[i] || 'u'].push(short(it.t, 70) + (it.v ? ' (' + short(it.v, 30) + ')' : '') + (cm ? '\n   ↳ ' + cm : '')); });
+    lines.push('My choices for the Amazon items:');
+    if (grp.r.length) { lines.push('', 'RETURN (' + grp.r.length + '):'); grp.r.forEach(s => lines.push('• ' + s)); }
+    if (grp.k.length) { lines.push('', 'KEEP (' + grp.k.length + '):'); grp.k.forEach(s => lines.push('• ' + s)); }
+    if (grp.u.length) { lines.push('', 'NOT SURE YET (' + grp.u.length + '):'); grp.u.forEach(s => lines.push('• ' + s)); }
+    return lines.join('\n');
+  }
+
+  function toast(t) { const e = $('toast'); e.textContent = t; e.style.display = 'block'; setTimeout(() => { e.style.display = 'none'; }, 1800); }
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const digits = String(data.to || '').replace(/[^0-9+]/g, '');
+
+  $('send').addEventListener('click', () => {
+    const m = buildMessage();
+    $('msg').textContent = m;
+    const enc = encodeURIComponent(m);
+    $('o-sms').href = 'sms:' + digits + (isIOS ? '&' : '?') + 'body=' + enc;
+    $('o-wa').href = 'https://wa.me/' + digits.replace(/^\+/, '') + '?text=' + enc;
+    $('o-share').style.display = navigator.share ? 'block' : 'none';
+    $('sheet-bg').style.display = 'flex';
+  });
+  $('o-share').addEventListener('click', () => { try { navigator.share({ text: $('msg').textContent }).catch(() => {}); } catch (e) {} });
+  $('o-copy').addEventListener('click', () => {
+    const t = $('msg').textContent;
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents($('msg')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); try { document.execCommand('copy'); toast('Copied'); } catch (e) { toast('Press and hold the text to copy'); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(() => toast('Copied'), fallback); else fallback();
+  });
+  $('o-close').addEventListener('click', () => { $('sheet-bg').style.display = 'none'; });
+  $('sheet-bg').addEventListener('click', e => { if (e.target === $('sheet-bg')) $('sheet-bg').style.display = 'none'; });
+  }
+
+  const hashed = parseHash();
+  if (EMBEDDED) {
+    boot(EMBEDDED);
+  } else if (hashed && hashed.kind === 'embed') {
+    boot(hashed.data);
+  } else if (hashed && hashed.kind === 'live') {
+    list.appendChild(el('div', 'empty', 'Loading the list…'));
+    fetch(hashed.db + '/reviews/' + hashed.id + '.json').then(r => {
+      if (!r.ok) throw new Error('http');
+      return r.json();
+    }).then(v => {
+      list.innerHTML = '';
+      if (!v || !Array.isArray(v.items)) throw new Error('empty');
+      v.id = hashed.id;
+      v.db = hashed.db;
+      boot(v);
+    }).catch(() => {
+      list.innerHTML = '';
+      list.appendChild(el('div', 'empty', 'Could not load this list. Check your connection, then open the link again.'));
+    });
+  } else {
+    list.appendChild(el('div', 'empty', 'Nothing to show here. Please open the file or link that was sent to you.'));
+  }
+})();
+</script>
+</body>
+</html>
