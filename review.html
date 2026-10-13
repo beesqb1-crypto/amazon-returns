@@ -28,14 +28,12 @@
   a.view { display:inline-block; margin-top:8px; font-size:13px; font-weight:700; color:var(--teal); text-decoration:none; }
   .choice { display:flex; gap:8px; margin-top:12px; }
   .choice button { flex:1; border:2px solid #d5dbe1; background:#fff; color:#333; border-radius:10px; padding:13px 6px; font-size:15px; font-weight:700; cursor:pointer; -webkit-tap-highlight-color:transparent; }
-  .comment-toggle { display:inline-block; margin-top:10px; background:none; border:none; padding:0; font-size:13px; color:var(--mute); cursor:pointer; -webkit-tap-highlight-color:transparent; }
-  .comment-toggle.has-comment { color:var(--teal); font-weight:600; }
-  .comment-area { margin-top:8px; display:none; }
-  .comment-area.open { display:block; }
-  .comment-area textarea { width:100%; border:1px solid #d5dbe1; border-radius:8px; padding:8px; font-size:14px; font-family:inherit; resize:vertical; min-height:60px; color:var(--ink); background:#fff; outline:none; }
-  .comment-area textarea:focus { border-color:var(--teal); }
   .choice button.on.ret  { background:var(--red);   border-color:var(--red);   color:#fff; }
   .choice button.on.keep { background:var(--green); border-color:var(--green); color:#fff; }
+  .cmt-toggle { display:block; width:100%; margin-top:8px; background:none; border:none; text-align:left; padding:6px 2px; font-size:13px; font-weight:700; color:var(--mute); cursor:pointer; }
+  .cmt-toggle.has { color:var(--teal); }
+  .cmt-box { display:none; width:100%; margin-top:4px; border:1px solid #d5dbe1; border-radius:8px; padding:9px 10px; font:14px/1.4 inherit; font-family:inherit; background:#fff; resize:vertical; }
+  .cmt-box.open { display:block; }
   .bar { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #d5dbe1; box-shadow:0 -3px 12px rgba(0,0,0,.12); padding:10px 12px calc(10px + env(safe-area-inset-bottom)); z-index:20; }
   .sum { font-size:13px; color:var(--mute); text-align:center; margin-bottom:8px; }
   .sum b { color:var(--ink); }
@@ -67,7 +65,6 @@
 <div class="bar" id="bar" style="display:none">
   <div class="sum" id="sum"></div>
   <div class="sync" id="sync"></div>
-  <button class="send" id="done-btn" style="display:none" onclick="submitDone()">✓ Done — send my choices</button>
   <button class="send" id="send" disabled>Send my choices</button>
 </div>
 
@@ -119,18 +116,13 @@ const EMBEDDED = /*__DATA__*/null;
 
   const saveKey = 'rv_' + String(data.id || 'x');
   let choice = {};
+  try { choice = JSON.parse(localStorage.getItem(saveKey) || '{}') || {}; } catch (e) {}
+  function persist() { try { localStorage.setItem(saveKey, JSON.stringify(choice)); } catch (e) {} }
+  const cKey = 'rvc_' + String(data.id || 'x');
   let comments = {};
-  try {
-    const saved = JSON.parse(localStorage.getItem(saveKey) || '{}') || {};
-    choice = saved.choices ? saved.choices : saved;
-    comments = saved.comments || {};
-    // if saved was the old flat format (keys are numeric choice values), comments would be {}
-    if (typeof choice !== 'object' || Array.isArray(choice)) choice = {};
-  } catch (e) {}
-  function persist() {
-    try { localStorage.setItem(saveKey, JSON.stringify({ choices: choice, comments: comments })); } catch (e) {}
-  }
-  const commentsOf = () => data.items.map((_, i) => String(comments[i] || ''));
+  try { comments = JSON.parse(localStorage.getItem(cKey) || '{}') || {}; } catch (e) {}
+  function persistC() { try { localStorage.setItem(cKey, JSON.stringify(comments)); } catch (e) {} }
+  const commentList = () => data.items.map((_, i) => String(comments[i] || '').slice(0, 500));
 
   // Live mode: choices are saved to a small online database that the sender's app reads, so nothing has to be sent back by hand.
   const DB = (function () {
@@ -140,6 +132,7 @@ const EMBEDDED = /*__DATA__*/null;
   const RID = String(data.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
   const LIVE = !!(DB && RID.length >= 12);
   const repaint = [];
+  const cmtRepaint = [];
   function setSync(t, cls) { const s = $('sync'); s.textContent = t; s.className = 'sync' + (cls ? ' ' + cls : ''); }
   const codeOf = () => data.items.map((_, i) => choice[i] || '-').join('');
   let saveTimer = null;
@@ -148,7 +141,7 @@ const EMBEDDED = /*__DATA__*/null;
     setSync('Saving…');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      fetch(DB + '/reviews/' + RID + '.json', { method: 'PATCH', body: JSON.stringify({ choices: codeOf(), comments: commentsOf(), n: data.items.length, updatedAt: Date.now() }) })
+      fetch(DB + '/reviews/' + RID + '.json', { method: 'PATCH', body: JSON.stringify({ choices: codeOf(), comments: commentList(), n: data.items.length, updatedAt: Date.now() }) })
         .then(r => { if (!r.ok) throw new Error('http ' + r.status); setSync('✓ Saved - your answers will show up in their app', 'ok'); })
         .catch(() => setSync('Could not save - check your connection, then tap a choice again', 'bad'));
     }, 350);
@@ -194,46 +187,23 @@ const EMBEDDED = /*__DATA__*/null;
     row.appendChild(bR); row.appendChild(bK);
     card.appendChild(row);
 
-    // Comment toggle + area
-    const cmtToggle = el('button', 'comment-toggle', '💬 Add a comment');
-    const cmtArea = el('div', 'comment-area');
-    const cmtTa = el('textarea');
-    cmtTa.rows = 3;
-    cmtTa.placeholder = 'Question or note about this item…';
-    cmtArea.appendChild(cmtTa);
-    card.appendChild(cmtToggle);
-    card.appendChild(cmtArea);
-
-    function paintComment() {
-      const txt = comments[idx] || '';
-      if (txt) {
-        cmtToggle.textContent = '💬 1 comment';
-        cmtToggle.className = 'comment-toggle has-comment';
-        cmtArea.className = 'comment-area open';
-        cmtTa.value = txt;
-      } else {
-        cmtToggle.textContent = '💬 Add a comment';
-        cmtToggle.className = 'comment-toggle';
-        // keep area open if it was opened by user but just cleared
-      }
+    const tg = el('button', 'cmt-toggle'), box = el('textarea', 'cmt-box');
+    tg.type = 'button'; box.rows = 3; box.maxLength = 500; box.placeholder = 'Question or note about this item…';
+    box.value = comments[idx] || '';
+    function paintC() {
+      const has = !!(comments[idx] && comments[idx].trim());
+      tg.className = 'cmt-toggle' + (has ? ' has' : '');
+      tg.textContent = has ? '💬 1 comment' : '💬 Add a comment';
     }
-    cmtToggle.addEventListener('click', () => {
-      const isOpen = cmtArea.classList.contains('open');
-      if (isOpen && !cmtTa.value.trim()) {
-        cmtArea.className = 'comment-area';
-      } else {
-        cmtArea.className = 'comment-area open';
-        cmtTa.focus();
-      }
+    tg.addEventListener('click', () => { box.classList.toggle('open'); if (box.classList.contains('open')) box.focus(); });
+    box.addEventListener('input', () => {
+      if (box.value.trim()) comments[idx] = box.value; else delete comments[idx];
+      persistC(); paintC(); save();
     });
-    cmtTa.addEventListener('input', () => {
-      const val = cmtTa.value;
-      if (val.trim()) { comments[idx] = val; } else { delete comments[idx]; }
-      paintComment();
-      persist();
-      save();
-    });
-    paintComment();
+    card.appendChild(tg); card.appendChild(box);
+    if (comments[idx]) box.classList.add('open');
+    paintC();
+    cmtRepaint.push(() => { box.value = comments[idx] || ''; paintC(); if (comments[idx]) box.classList.add('open'); });
 
     function paint() {
       const c = choice[idx];
@@ -245,7 +215,6 @@ const EMBEDDED = /*__DATA__*/null;
     bR.addEventListener('click', () => set('r'));
     bK.addEventListener('click', () => set('k'));
     repaint.push(paint);
-    repaint.push(paintComment);
     paint();
     cards.push(card);
     list.appendChild(card);
@@ -263,25 +232,26 @@ const EMBEDDED = /*__DATA__*/null;
     parts.forEach(([t, s]) => { const n = t === 'b' ? document.createElement('b') : document.createTextNode(s); if (t === 'b') n.textContent = s; $('sum').appendChild(n); });
     if (c.rt > 0) $('sum').appendChild(document.createTextNode('  ·  returning $' + c.rt.toFixed(2)));
     $('send').disabled = (c.r + c.k) === 0;
-    const db = $('done-btn'); if (db) db.disabled = (c.r + c.k) === 0;
   }
   $('bar').style.display = 'block';
   summary();
   if (LIVE) {
     $('send').textContent = 'Or send them as a message instead';
     $('send').className = 'send alt';
-    $('done-btn').style.display = 'block';
     setSync(Object.keys(choice).length ? 'Your answers save automatically' : 'Tap Return or Keep - it saves automatically');
     // reopened on another phone/browser: pick up what was already saved
-    if (!Object.keys(choice).length) {
+    if (!Object.keys(choice).length || !Object.keys(comments).length) {
       fetch(DB + '/reviews/' + RID + '.json').then(r => r.ok ? r.json() : null).then(v => {
-        if (v && typeof v.choices === 'string') {
+        if (!v) return;
+        if (!Object.keys(choice).length && typeof v.choices === 'string') {
           for (let i = 0; i < data.items.length; i++) { const c = v.choices.charAt(i); if (c === 'r' || c === 'k') choice[i] = c; }
-          if (Array.isArray(v.comments)) {
-            v.comments.forEach((txt, i) => { if (txt) comments[i] = txt; });
-          }
           persist(); repaint.forEach(f => f()); summary();
           if (Object.keys(choice).length) setSync('✓ Your earlier answers were loaded', 'ok');
+        }
+        if (!Object.keys(comments).length && v.comments) {
+          const cs = Array.isArray(v.comments) ? v.comments : Object.keys(v.comments).map(k => v.comments[k]);
+          cs.forEach((t, i) => { if (i < data.items.length && typeof t === 'string' && t.trim()) comments[i] = t; });
+          persistC(); cmtRepaint.forEach(f => f());
         }
       }).catch(() => {});
     }
@@ -291,15 +261,11 @@ const EMBEDDED = /*__DATA__*/null;
   function buildMessage() {
     const lines = [];
     const grp = { r: [], k: [], u: [] };
-    data.items.forEach((it, i) => {
-      const label = short(it.t, 70) + (it.v ? ' (' + short(it.v, 30) + ')' : '');
-      const cmt = String(comments[i] || '').trim();
-      grp[choice[i] || 'u'].push({ label, cmt });
-    });
+    data.items.forEach((it, i) => { const cm = String(comments[i] || '').replace(/\s+/g, ' ').trim(); grp[choice[i] || 'u'].push(short(it.t, 70) + (it.v ? ' (' + short(it.v, 30) + ')' : '') + (cm ? '\n   ↳ ' + cm : '')); });
     lines.push('My choices for the Amazon items:');
-    if (grp.r.length) { lines.push('', 'RETURN (' + grp.r.length + '):'); grp.r.forEach(o => { lines.push('• ' + o.label); if (o.cmt) lines.push('  ↳ ' + o.cmt); }); }
-    if (grp.k.length) { lines.push('', 'KEEP (' + grp.k.length + '):'); grp.k.forEach(o => { lines.push('• ' + o.label); if (o.cmt) lines.push('  ↳ ' + o.cmt); }); }
-    if (grp.u.length) { lines.push('', 'NOT SURE YET (' + grp.u.length + '):'); grp.u.forEach(o => { lines.push('• ' + o.label); if (o.cmt) lines.push('  ↳ ' + o.cmt); }); }
+    if (grp.r.length) { lines.push('', 'RETURN (' + grp.r.length + '):'); grp.r.forEach(s => lines.push('• ' + s)); }
+    if (grp.k.length) { lines.push('', 'KEEP (' + grp.k.length + '):'); grp.k.forEach(s => lines.push('• ' + s)); }
+    if (grp.u.length) { lines.push('', 'NOT SURE YET (' + grp.u.length + '):'); grp.u.forEach(s => lines.push('• ' + s)); }
     return lines.join('\n');
   }
 
@@ -307,31 +273,7 @@ const EMBEDDED = /*__DATA__*/null;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const digits = String(data.to || '').replace(/[^0-9+]/g, '');
 
-  function submitDone() {
-    // Force an immediate save then show a confirmation screen
-    clearTimeout(saveTimer);
-    const btn = $('done-btn');
-    btn.disabled = true;
-    btn.textContent = 'Saving…';
-    fetch(DB + '/reviews/' + RID + '.json', {
-      method: 'PATCH',
-      body: JSON.stringify({ choices: codeOf(), comments: commentsOf(), n: data.items.length, updatedAt: Date.now() })
-    }).then(r => {
-      if (!r.ok) throw new Error('http ' + r.status);
-      // swap the whole page content to a confirmation screen
-      document.body.innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:32px 24px;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f0f2f5;text-align:center">' +
-        '<div style="font-size:64px;margin-bottom:16px">✅</div>' +
-        '<h1 style="font-size:22px;margin:0 0 10px;color:#0f1111">Got it, thanks!</h1>' +
-        '<p style="font-size:15px;color:#5b6570;margin:0 0 24px;line-height:1.5">Your choices have been saved.<br>They\'ll show up in the app automatically.</p>' +
-        '<p style="font-size:13px;color:#8a9099">You can close this page.</p>' +
-        '</div>';
-    }).catch(() => {
-      btn.disabled = false;
-      btn.textContent = '✓ Done — send my choices';
-      setSync('Could not save — check your connection and try again', 'bad');
-    });
-  }
+  $('send').addEventListener('click', () => {
     const m = buildMessage();
     $('msg').textContent = m;
     const enc = encodeURIComponent(m);
